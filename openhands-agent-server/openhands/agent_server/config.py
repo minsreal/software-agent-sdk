@@ -190,6 +190,15 @@ class Config(BaseModel):
         default_factory=list,
         description="Webhooks to invoke in response to events",
     )
+    llm_completion_logs_path: Path | None = Field(
+        default=None,
+        description=(
+            "If set, LLM completion logs (request/response JSON produced by "
+            "any LLM with log_completions=True) are written as files under "
+            "this directory, mirroring the local `log_completions_folder` "
+            "behavior. Configurable via OH_LLM_COMPLETION_LOGS_PATH."
+        ),
+    )
     enable_vscode: bool = Field(
         default=True,
         description="Whether to enable VSCode server functionality",

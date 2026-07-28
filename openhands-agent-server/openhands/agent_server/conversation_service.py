@@ -46,6 +46,7 @@ from openhands.sdk.conversation.title_utils import (
 )
 from openhands.sdk.event import MessageEvent
 from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
+from openhands.sdk.event.llm_completion_log import LLMCompletionLogEvent
 from openhands.sdk.git.exceptions import GitCommandError, GitRepositoryError
 from openhands.sdk.git.utils import run_git_command, validate_git_repository
 from openhands.sdk.mcp.utils import MCPToolProvider
@@ -474,6 +475,7 @@ class ConversationService:
     conversations_dir: Path = field()
     webhook_specs: list[WebhookSpec] = field(default_factory=list)
     session_api_key: str | None = field(default=None)
+    llm_completion_logs_path: Path | None = field(default=None)
     cipher: Cipher | None = None
     mcp_tool_provider: MCPToolProvider | None = None
     owner_instance_id: str = field(default_factory=lambda: uuid4().hex)
@@ -1283,6 +1285,7 @@ class ConversationService:
             session_api_key=(
                 config.session_api_keys[0] if config.session_api_keys else None
             ),
+            llm_completion_logs_path=config.llm_completion_logs_path,
             cipher=config.cipher,
             mcp_tool_provider=create_settings_backed_mcp_tool_provider(config),
             max_concurrent_runs=config.max_concurrent_runs,
@@ -1318,6 +1321,12 @@ class ConversationService:
             if stored.autotitle and stored.title is None:
                 await event_service.subscribe_to_events(
                     AutoTitleSubscriber(service=event_service)
+                )
+            if self.llm_completion_logs_path is not None:
+                await event_service.subscribe_to_events(
+                    LLMCompletionLogFileSubscriber(
+                        log_dir=self.llm_completion_logs_path
+                    )
                 )
             await asyncio.gather(
                 *[
@@ -1357,6 +1366,32 @@ class _EventSubscriber(Subscriber):
             return
         self.service.stored.updated_at = utc_now()
         update_last_execution_time()
+
+
+@dataclass
+class LLMCompletionLogFileSubscriber(Subscriber):
+    """Writes LLMCompletionLogEvent payloads to files on disk.
+
+    Server mode always intercepts the telemetry callback to stream logs as
+    events (see EventService._setup_llm_log_streaming), so
+    log_completions_folder is otherwise ignored server-side. This restores
+    file output by listening for the resulting events instead.
+    """
+
+    log_dir: Path
+
+    async def __call__(self, event: Event) -> None:
+        if not isinstance(event, LLMCompletionLogEvent):
+            return
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            (self.log_dir / event.filename).write_text(event.log_data, encoding="utf-8")
+        except Exception:
+            logger.warning(
+                f"Failed to write LLM completion log file "
+                f"for usage_id={event.usage_id}",
+                exc_info=True,
+            )
 
 
 @dataclass
