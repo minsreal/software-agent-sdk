@@ -85,6 +85,7 @@ class EventService:
     mcp_tool_provider: MCPToolProvider | None = None
     owner_instance_id: str = field(default_factory=lambda: uuid4().hex)
     lease_ttl_seconds: float = DEFAULT_LEASE_TTL_SECONDS
+    force_log_completions: bool = False
     _conversation: LocalConversation | None = field(default=None, init=False)
     _pub_sub: PubSub[Event] = field(
         default_factory=lambda: PubSub[Event](max_subscribers=50), init=False
@@ -761,6 +762,12 @@ class EventService:
         agent = agent_cls.model_validate(
             self.stored.agent.model_dump(context={"expose_secrets": True}),
         )
+        if self.force_log_completions:
+            # get_all_llms() returns live references, not copies, so mutating
+            # them here updates every LLM this agent (and its condenser,
+            # critic, sub-agents, etc.) actually uses.
+            for llm in agent.get_all_llms():
+                llm.log_completions = True
 
         # Create LocalConversation with plugins and hook_config.
         # Plugins are loaded lazily on first run()/send_message() call.

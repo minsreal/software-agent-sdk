@@ -199,6 +199,17 @@ class Config(BaseModel):
             "behavior. Configurable via OH_LLM_COMPLETION_LOGS_PATH."
         ),
     )
+    force_log_completions: bool = Field(
+        default=False,
+        description=(
+            "If true, force log_completions=True on every LLM used by every "
+            "conversation, regardless of what the client requested. Intended "
+            "for local debugging only — this unconditionally logs full LLM "
+            "request/response payloads (which may include API keys and user "
+            "content) for all conversations. Configurable via "
+            "OH_FORCE_LOG_COMPLETIONS."
+        ),
+    )
     enable_vscode: bool = Field(
         default=True,
         description="Whether to enable VSCode server functionality",

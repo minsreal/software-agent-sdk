@@ -1,5 +1,6 @@
 """Unit tests for LLMCompletionLogFileSubscriber."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -23,14 +24,33 @@ def sample_log_event() -> LLMCompletionLogEvent:
 
 
 @pytest.mark.asyncio
-async def test_writes_log_data_to_file(tmp_path: Path, sample_log_event):
+async def test_writes_pretty_printed_log_data_to_file(tmp_path: Path, sample_log_event):
     log_dir = tmp_path / "completions"
     subscriber = LLMCompletionLogFileSubscriber(log_dir=log_dir)
 
     await subscriber(sample_log_event)
 
     written = log_dir / sample_log_event.filename
-    assert written.read_text(encoding="utf-8") == sample_log_event.log_data
+    assert written.read_text(encoding="utf-8") == json.dumps(
+        json.loads(sample_log_event.log_data), indent=2, ensure_ascii=False
+    )
+
+
+@pytest.mark.asyncio
+async def test_falls_back_to_raw_text_when_log_data_is_not_json(tmp_path: Path):
+    log_dir = tmp_path / "completions"
+    subscriber = LLMCompletionLogFileSubscriber(log_dir=log_dir)
+    event = LLMCompletionLogEvent(
+        filename="broken.json",
+        log_data="not valid json",
+        model_name="gpt-4o",
+        usage_id="main",
+    )
+
+    await subscriber(event)
+
+    written = log_dir / event.filename
+    assert written.read_text(encoding="utf-8") == "not valid json"
 
 
 @pytest.mark.asyncio

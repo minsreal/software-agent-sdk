@@ -2143,6 +2143,41 @@ class TestEventServiceStartWithRunningStatus:
         # Assert
         assert (workspace_dir / ".git").exists()
 
+    @pytest.mark.asyncio
+    async def test_start_forces_log_completions_when_configured(
+        self, event_service, tmp_path
+    ):
+        """force_log_completions=True must override every LLM's own setting."""
+        event_service.conversations_dir = tmp_path
+        conv_dir = tmp_path / event_service.stored.id.hex
+        conv_dir.mkdir(parents=True, exist_ok=True)
+        workspace_dir = tmp_path / "workspace"
+        event_service.stored.workspace = LocalWorkspace(working_dir=str(workspace_dir))
+        event_service.force_log_completions = True
+        assert event_service.stored.agent.llm.log_completions is False
+
+        with patch(
+            "openhands.agent_server.event_service.LocalConversation"
+        ) as MockConversation:
+            mock_conv = MagicMock()
+            mock_state = MagicMock()
+            mock_state.execution_status = ConversationExecutionStatus.IDLE
+            mock_state.events = []
+            mock_state.stats = MagicMock()
+            mock_conv._state = mock_state
+            mock_conv.state = mock_state
+            mock_conv._on_event = MagicMock()
+            mock_conv.agent.get_all_llms.return_value = []
+            MockConversation.return_value = mock_conv
+
+            await event_service.start()
+
+            started_agent = MockConversation.call_args.kwargs["agent"]
+
+        llms = list(started_agent.get_all_llms())
+        assert llms
+        assert all(llm.log_completions for llm in llms)
+
     @pytest.mark.skipif(not shutil.which("git"), reason="git executable not found")
     @pytest.mark.asyncio
     async def test_start_is_idempotent_for_already_initialized_repo(

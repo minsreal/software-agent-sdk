@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -476,6 +477,7 @@ class ConversationService:
     webhook_specs: list[WebhookSpec] = field(default_factory=list)
     session_api_key: str | None = field(default=None)
     llm_completion_logs_path: Path | None = field(default=None)
+    force_log_completions: bool = field(default=False)
     cipher: Cipher | None = None
     mcp_tool_provider: MCPToolProvider | None = None
     owner_instance_id: str = field(default_factory=lambda: uuid4().hex)
@@ -1286,6 +1288,7 @@ class ConversationService:
                 config.session_api_keys[0] if config.session_api_keys else None
             ),
             llm_completion_logs_path=config.llm_completion_logs_path,
+            force_log_completions=config.force_log_completions,
             cipher=config.cipher,
             mcp_tool_provider=create_settings_backed_mcp_tool_provider(config),
             max_concurrent_runs=config.max_concurrent_runs,
@@ -1304,6 +1307,7 @@ class ConversationService:
             mcp_tool_provider=self.mcp_tool_provider,
             owner_instance_id=self.owner_instance_id,
             lease_ttl_seconds=self.lease_ttl_seconds,
+            force_log_completions=self.force_log_completions,
         )
         # Lease renewal is handled by the centralized
         # _renew_all_leases_loop task on ConversationService.
@@ -1385,7 +1389,13 @@ class LLMCompletionLogFileSubscriber(Subscriber):
             return
         try:
             self.log_dir.mkdir(parents=True, exist_ok=True)
-            (self.log_dir / event.filename).write_text(event.log_data, encoding="utf-8")
+            try:
+                formatted = json.dumps(
+                    json.loads(event.log_data), indent=2, ensure_ascii=False
+                )
+            except (json.JSONDecodeError, TypeError):
+                formatted = event.log_data
+            (self.log_dir / event.filename).write_text(formatted, encoding="utf-8")
         except Exception:
             logger.warning(
                 f"Failed to write LLM completion log file "
