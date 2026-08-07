@@ -249,6 +249,28 @@ REQUIRES_INLINE_IMAGE_DATA_MODELS: tuple[str, ...] = (
 )
 
 
+# Fallback per-token pricing (USD) for models LiteLLM's cost table doesn't
+# (yet) recognize, so ``Telemetry._compute_cost`` doesn't silently fail with
+# "This model isn't mapped yet" and skip cost accounting. Only applied when
+# the LLM wasn't given explicit input_cost_per_token/output_cost_per_token.
+# Remove entries once LiteLLM ships pricing for the model (verify via
+# ``litellm.model_cost``).
+UNVERIFIED_MODEL_PRICING: dict[str, tuple[float, float]] = {
+    # (input_cost_per_token, output_cost_per_token)
+    "claude-sonnet-5": (0.000005, 0.000025),
+}
+
+
+def get_default_pricing(model: str) -> tuple[float, float] | None:
+    """Return fallback (input_cost_per_token, output_cost_per_token) for
+    models not yet priced by LiteLLM, or None if there's no override."""
+    raw = (model or "").strip().lower()
+    for pattern, pricing in UNVERIFIED_MODEL_PRICING.items():
+        if pattern in raw:
+            return pricing
+    return None
+
+
 def get_features(model: str) -> ModelFeatures:
     """Get model features."""
     return ModelFeatures(

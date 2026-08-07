@@ -109,7 +109,7 @@ from openhands.sdk.llm.utils.image_inline import (
 from openhands.sdk.llm.utils.image_resize import maybe_resize_messages_for_provider
 from openhands.sdk.llm.utils.litellm_provider import infer_litellm_provider
 from openhands.sdk.llm.utils.metrics import Metrics
-from openhands.sdk.llm.utils.model_features import get_features
+from openhands.sdk.llm.utils.model_features import get_default_pricing, get_features
 from openhands.sdk.llm.utils.openhands_provider import (
     LiteLLMCallKwargs,
     canonicalize_openhands_llm_payload,
@@ -611,12 +611,21 @@ class LLM(BaseModel, RetryMixin, NonNativeToolCallingMixin):
             self._metrics = Metrics(model_name=self.model)
 
         if self._telemetry is None:
+            input_cost_per_token = self.input_cost_per_token
+            output_cost_per_token = self.output_cost_per_token
+            if input_cost_per_token is None and output_cost_per_token is None:
+                fallback_pricing = get_default_pricing(
+                    self._model_name_for_capabilities()
+                )
+                if fallback_pricing is not None:
+                    input_cost_per_token, output_cost_per_token = fallback_pricing
+
             self._telemetry = Telemetry(
                 model_name=self.model,
                 log_enabled=self.log_completions,
                 log_dir=self.log_completions_folder if self.log_completions else None,
-                input_cost_per_token=self.input_cost_per_token,
-                output_cost_per_token=self.output_cost_per_token,
+                input_cost_per_token=input_cost_per_token,
+                output_cost_per_token=output_cost_per_token,
                 metrics=self._metrics,
             )
 

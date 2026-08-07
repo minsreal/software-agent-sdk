@@ -1,6 +1,7 @@
 import pytest
 
 from openhands.sdk.llm.utils.model_features import (
+    get_default_pricing,
     get_features,
     model_matches,
 )
@@ -253,6 +254,15 @@ def test_model_matches_substring_semantics():
     # Substring match: 'gpt-4o' matches 'gpt-4o-mini'
     assert model_matches("gpt-4o-mini", patterns) is True
     assert model_matches("claude-3-haiku", patterns) is False
+
+
+def test_get_default_pricing_known_override():
+    assert get_default_pricing("claude-sonnet-5") == (0.000005, 0.000025)
+    assert get_default_pricing("anthropic/claude-sonnet-5") == (0.000005, 0.000025)
+
+
+def test_get_default_pricing_unknown_model():
+    assert get_default_pricing("completely-unknown-model-12345") is None
 
 
 def test_get_features_unknown_model():
